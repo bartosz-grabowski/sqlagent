@@ -28,9 +28,16 @@ This file will be imported into the MySQL container during startup.
 
 ### 2. Set the MySQL password
 
-Store your MySQL root password in `./db/passwd.txt`.
+Store your MySQL root password in `./db/passwd.txt`. This value will be read by the container during startup.
 
-The file should contain **only the password**, with no extra spaces or newlines. This value will be read by the container during startup.
+Make sure that `./db/passwd.txt` contains *only* the password and **no trailing newline**. Many editors automatically append a newline at the end of the file, which will cause MySQL authentication to fail.
+
+To safely create the file without adding a newline, run:
+
+```bash
+echo -n "your_password_here" > db/passwd.txt
+```
+
 
 ### 3. (Optional) Choose the model
 
