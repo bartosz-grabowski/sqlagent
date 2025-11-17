@@ -1,0 +1,39 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gpt-oss:20b}
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./ollama/ollama:/root/.ollama
+      - ./ollama/entrypoint.sh:/entrypoint.sh
+    entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
+  db:
+    image: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+      MYSQL_DATABASE: sqlagent_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./db/db.sql:/docker-entrypoint-initdb.d/db.sql
+    secrets:
+      - db_root_password
+  agent:
+    build: .
+    environment:
+      OLLAMA_HOST: ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gpt-oss:20b}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+    depends_on:
+      - ollama
+      - db
+    ports:
+      - "8000:8000"
+    secrets:
+      - db_root_password
+secrets:
+  db_root_password:
+    file: ./db/passwd.txt
