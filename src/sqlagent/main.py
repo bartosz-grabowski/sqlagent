@@ -1,47 +1,80 @@
 """Main module for the SQLAgent FastAPI application."""
 
-import os
-from pathlib import Path
-
 from fastapi import FastAPI, HTTPException
-from langchain.chat_models import init_chat_model
 from langchain.agents import create_agent
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
+from langchain_ollama import ChatOllama
 
+from sqlagent.config import get_settings
 from sqlagent.model_utils import is_model_available
 
-
-# MySQL connection details
-DB_USER = "root"
-DB_PASSWORD_FILE = os.environ["MYSQL_ROOT_PASSWORD_FILE"]
-DB_HOST = "db"
-DB_NAME = "sqlagent_db"
-# OLLAMA MODEL
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gpt-oss:20b")
+app = FastAPI(title="SQLAgent")
 
 
-app = FastAPI()
+def get_llm() -> ChatOllama:
+    """Create a ChatOllama client for the configured Ollama endpoint."""
+    settings = get_settings()
+    return ChatOllama(
+        model=settings.ollama_model,
+        base_url=settings.ollama_base_url,
+        temperature=0,
+    )
+
+
+def get_database() -> SQLDatabase:
+    """Create a SQLDatabase instance from the configured connection details."""
+    settings = get_settings()
+    return SQLDatabase.from_uri(settings.database_uri)
+
+
+@app.get("/health")
+def health() -> dict:
+    """Report whether the LLM and database are reachable."""
+    settings = get_settings()
+    model_ready = is_model_available(
+        settings.ollama_model,
+        host=settings.ollama_base_url,
+    )
+    if not model_ready:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Ollama model '{settings.ollama_model}' is not ready",
+        )
+
+    try:
+        get_database()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not reachable or misconfigured",
+        ) from exc
+
+    return {
+        "status": "ok",
+        "ollama_model": settings.ollama_model,
+        "ollama_base_url": settings.ollama_base_url,
+    }
 
 
 @app.get("/")
 def main(q: str) -> dict:
     """Main endpoint to process user queries."""
-    if not is_model_available(OLLAMA_MODEL):
+    settings = get_settings()
+
+    if not is_model_available(settings.ollama_model, host=settings.ollama_base_url):
         raise HTTPException(
             status_code=503,
-            detail=f"Ollama model '{OLLAMA_MODEL}' not ready or failed to load",
+            detail=f"Ollama model '{settings.ollama_model}' not ready or failed to load",
         )
-    llm = init_chat_model(f"ollama:{OLLAMA_MODEL}", temperature=0)
+    llm = get_llm()
 
-    db_passwd = Path(DB_PASSWORD_FILE).read_text()
-    db_uri = f"mysql+pymysql://{DB_USER}:{db_passwd}@{DB_HOST}/{DB_NAME}"
     try:
-        db = SQLDatabase.from_uri(db_uri)
-    except Exception:
+        db = get_database()
+    except Exception as exc:
         raise HTTPException(
             status_code=503, detail="Database not reachable or misconfigured"
-        )
+        ) from exc
 
     toolkit = SQLDatabaseToolkit(db=db, llm=llm)
     tools = toolkit.get_tools()
@@ -68,11 +101,11 @@ def main(q: str) -> dict:
     Then you should query the schema of the most relevant tables.
     The SQL schema contains only sample rows, not the full dataset. Treat it as structure only.
     Generate SQL queries to retrieve information instead of assuming data from the schema.
-    
+
     Do not include any special characters in your final output, e.g. new line characters.
     """.format(
         dialect=db.dialect,
-        top_k=5,
+        top_k=settings.top_k,
     )
 
     agent = create_agent(
