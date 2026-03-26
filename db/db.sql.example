@@ -1,0 +1,134 @@
+CREATE DATABASE IF NOT EXISTS sqlagent_db;
+USE sqlagent_db;
+
+DROP TABLE IF EXISTS order_items;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS customers;
+
+CREATE TABLE customers (
+    customer_id INT PRIMARY KEY AUTO_INCREMENT,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    city VARCHAR(80) NOT NULL,
+    country VARCHAR(80) NOT NULL,
+    signup_date DATE NOT NULL,
+    vip_tier ENUM('bronze', 'silver', 'gold') NOT NULL DEFAULT 'bronze'
+);
+
+CREATE TABLE products (
+    product_id INT PRIMARY KEY AUTO_INCREMENT,
+    sku VARCHAR(40) NOT NULL UNIQUE,
+    product_name VARCHAR(120) NOT NULL,
+    category VARCHAR(80) NOT NULL,
+    unit_price DECIMAL(10, 2) NOT NULL,
+    stock_quantity INT NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE orders (
+    order_id INT PRIMARY KEY AUTO_INCREMENT,
+    customer_id INT NOT NULL,
+    order_date DATE NOT NULL,
+    status ENUM('processing', 'shipped', 'delivered', 'cancelled') NOT NULL,
+    total_amount DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+);
+
+CREATE TABLE order_items (
+    order_item_id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10, 2) NOT NULL,
+    line_total DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(order_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+INSERT INTO customers (
+    full_name,
+    email,
+    city,
+    country,
+    signup_date,
+    vip_tier
+) VALUES
+    ('Alice Johnson', 'alice.johnson@example.com', 'Warsaw', 'Poland', '2025-11-03', 'gold'),
+    ('Mark Rivera', 'mark.rivera@example.com', 'New York', 'USA', '2025-11-15', 'silver'),
+    ('Lena Schmidt', 'lena.schmidt@example.com', 'Berlin', 'Germany', '2025-12-02', 'bronze'),
+    ('Priya Nair', 'priya.nair@example.com', 'Bengaluru', 'India', '2025-12-10', 'gold'),
+    ('Tomasz Zielinski', 'tomasz.zielinski@example.com', 'Krakow', 'Poland', '2025-12-28', 'silver'),
+    ('Sofia Rossi', 'sofia.rossi@example.com', 'Milan', 'Italy', '2026-01-08', 'bronze'),
+    ('Ethan Brooks', 'ethan.brooks@example.com', 'Austin', 'USA', '2026-01-21', 'gold'),
+    ('Maya Chen', 'maya.chen@example.com', 'Singapore', 'Singapore', '2026-02-03', 'silver');
+
+INSERT INTO products (
+    sku,
+    product_name,
+    category,
+    unit_price,
+    stock_quantity,
+    active
+) VALUES
+    ('ACC-001', 'Laptop Sleeve', 'Accessories', 29.99, 120, TRUE),
+    ('ELC-001', 'Wireless Mouse', 'Electronics', 24.50, 80, TRUE),
+    ('ELC-002', 'Mechanical Keyboard', 'Electronics', 89.00, 40, TRUE),
+    ('ELC-003', 'USB-C Hub', 'Electronics', 54.90, 60, TRUE),
+    ('AUD-001', 'Noise-Cancelling Headphones', 'Audio', 129.00, 25, TRUE),
+    ('FUR-001', 'Standing Desk', 'Furniture', 399.00, 12, TRUE),
+    ('FUR-002', 'Ergonomic Chair', 'Furniture', 249.00, 18, TRUE),
+    ('STA-001', 'Notebook Set', 'Stationery', 12.00, 200, TRUE),
+    ('ELC-004', 'Web Camera', 'Electronics', 69.00, 35, TRUE),
+    ('FUR-003', 'Desk Lamp', 'Furniture', 45.00, 50, TRUE);
+
+INSERT INTO orders (
+    customer_id,
+    order_date,
+    status,
+    total_amount
+) VALUES
+    (1, '2026-01-05', 'shipped', 53.99),
+    (2, '2026-01-12', 'delivered', 89.00),
+    (3, '2026-01-20', 'processing', 148.40),
+    (4, '2026-02-02', 'delivered', 444.00),
+    (5, '2026-02-11', 'shipped', 178.00),
+    (6, '2026-02-18', 'cancelled', 249.00),
+    (1, '2026-02-26', 'delivered', 227.00),
+    (7, '2026-03-01', 'processing', 105.00),
+    (8, '2026-03-08', 'delivered', 134.30),
+    (4, '2026-03-14', 'shipped', 693.00),
+    (2, '2026-03-18', 'delivered', 89.97),
+    (5, '2026-03-22', 'processing', 210.00);
+
+INSERT INTO order_items (
+    order_id,
+    product_id,
+    quantity,
+    unit_price,
+    line_total
+) VALUES
+    (1, 1, 1, 29.99, 29.99),
+    (1, 8, 2, 12.00, 24.00),
+    (2, 3, 1, 89.00, 89.00),
+    (3, 2, 1, 24.50, 24.50),
+    (3, 4, 1, 54.90, 54.90),
+    (3, 9, 1, 69.00, 69.00),
+    (4, 6, 1, 399.00, 399.00),
+    (4, 10, 1, 45.00, 45.00),
+    (5, 5, 1, 129.00, 129.00),
+    (5, 2, 2, 24.50, 49.00),
+    (6, 7, 1, 249.00, 249.00),
+    (7, 9, 2, 69.00, 138.00),
+    (7, 3, 1, 89.00, 89.00),
+    (8, 8, 5, 12.00, 60.00),
+    (8, 10, 1, 45.00, 45.00),
+    (9, 4, 2, 54.90, 109.80),
+    (9, 2, 1, 24.50, 24.50),
+    (10, 6, 1, 399.00, 399.00),
+    (10, 7, 1, 249.00, 249.00),
+    (10, 10, 1, 45.00, 45.00),
+    (11, 1, 3, 29.99, 89.97),
+    (12, 5, 1, 129.00, 129.00),
+    (12, 9, 1, 69.00, 69.00),
+    (12, 8, 1, 12.00, 12.00);

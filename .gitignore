@@ -13,3 +13,11 @@ wheels/
 ollama/ollama/
 db/*
 !db/.keep
+!db/*.example
+
+# Terraform-generated files
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
