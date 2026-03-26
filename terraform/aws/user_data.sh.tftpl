@@ -1,0 +1,46 @@
+#!/bin/bash
+set -euxo pipefail
+
+dnf update -y
+dnf install -y awscli curl docker git
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+systemctl enable --now docker
+usermod -aG docker ec2-user
+
+if [ "${swap_size_mb}" -gt 0 ] && [ ! -f /swapfile ]; then
+  fallocate -l "${swap_size_mb}M" /swapfile || dd if=/dev/zero of=/swapfile bs=1M count="${swap_size_mb}"
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+
+install -d -o ec2-user -g ec2-user /opt/sqlagent
+cd /opt/sqlagent
+
+git clone --branch "${project_ref}" --depth 1 "${project_repo_url}" app
+cd /opt/sqlagent/app
+
+mkdir -p db
+aws s3 cp "s3://${bootstrap_bucket}/${db_dump_object_key}" db/db.sql
+aws ssm get-parameter \
+  --name "${db_password_parameter}" \
+  --with-decryption \
+  --query "Parameter.Value" \
+  --output text > db/passwd.txt
+chmod 600 db/passwd.txt
+
+cat > .env.aws <<EOF
+APP_PORT=${app_port}
+MYSQL_DATABASE=${db_name}
+MYSQL_USER=${mysql_user}
+OLLAMA_MODEL=${ollama_model}
+EOF
+
+chown -R ec2-user:ec2-user /opt/sqlagent
+docker compose --env-file .env.aws -f compose.aws.yaml up -d --build

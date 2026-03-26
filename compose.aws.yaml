@@ -1,0 +1,61 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b-instruct-q5_0}
+    volumes:
+      - ollama-data:/root/.ollama
+      - ./ollama/entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
+
+  db:
+    image: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sqlagent_db}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./db/db.sql:/docker-entrypoint-initdb.d/db.sql:ro
+    secrets:
+      - db_root_password
+
+  agent:
+    build: .
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b-instruct-q5_0}
+      MYSQL_HOST: db
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-sqlagent_db}
+      MYSQL_USER: ${MYSQL_USER:-root}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+    depends_on:
+      - ollama
+      - db
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    secrets:
+      - db_root_password
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+
+secrets:
+  db_root_password:
+    file: ./db/passwd.txt
+
+volumes:
+  mysql-data:
+  ollama-data:
