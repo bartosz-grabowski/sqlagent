@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 dnf update -y
-dnf install -y awscli curl docker git
+dnf install -y awscli curl-minimal docker git
 
 mkdir -p /usr/local/lib/docker/cli-plugins
 curl -SL "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-linux-x86_64" \
