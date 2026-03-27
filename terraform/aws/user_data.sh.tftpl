@@ -35,7 +35,7 @@ aws ssm get-parameter \
   --query "Parameter.Value" \
   --output text
 )"
-printf '%s' "${DB_ROOT_PASSWORD}" > db/passwd.txt
+printf '%s' "$${DB_ROOT_PASSWORD}" > db/passwd.txt
 chmod 600 db/passwd.txt
 
 cat > .env.aws <<EOF
