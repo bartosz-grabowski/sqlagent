@@ -28,11 +28,14 @@ cd /opt/sqlagent/app
 
 mkdir -p db
 aws s3 cp "s3://${bootstrap_bucket}/${db_dump_object_key}" db/db.sql
+DB_ROOT_PASSWORD="$(
 aws ssm get-parameter \
   --name "${db_password_parameter}" \
   --with-decryption \
   --query "Parameter.Value" \
-  --output text > db/passwd.txt
+  --output text
+)"
+printf '%s' "${DB_ROOT_PASSWORD}" > db/passwd.txt
 chmod 600 db/passwd.txt
 
 cat > .env.aws <<EOF
@@ -43,4 +46,7 @@ OLLAMA_MODEL=${ollama_model}
 EOF
 
 chown -R ec2-user:ec2-user /opt/sqlagent
+# Docker Compose file-based secrets are bind-mounted from the host, so create
+# an agent-only copy readable by the container's non-root UID.
+install -m 0400 -o 999 -g 999 db/passwd.txt db/agent-passwd.txt
 docker compose --env-file .env.aws -f compose.aws.yaml up -d --build

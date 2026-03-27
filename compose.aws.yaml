@@ -37,8 +37,8 @@ services:
       - db
     ports:
       - "${APP_PORT:-8000}:8000"
-    secrets:
-      - db_root_password
+    volumes:
+      - ./db/agent-passwd.txt:/run/secrets/db_root_password:ro
     healthcheck:
       test:
         [
