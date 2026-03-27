@@ -1,0 +1,15 @@
+aws_region   = "us-east-1"
+project_ref  = "feature/aws-cloud-deployment"
+instance_type = "t3.small"
+
+# Restrict this in real deployments.
+app_ingress_cidr_blocks = ["0.0.0.0/0"]
+
+# Leave SSH disabled and use Session Manager unless you need direct SSH.
+ssh_key_name             = null
+ssh_ingress_cidr_blocks  = []
+
+db_dump_path     = "../../db/db.sql.example"
+db_root_password = "replace-me"
+
+ollama_model = "qwen2.5:0.5b-instruct-q5_0"

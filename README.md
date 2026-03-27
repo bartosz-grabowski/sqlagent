@@ -1,98 +1,200 @@
-# 🧠 SQLAgent
+# SQLAgent
 
-A lightweight open-source **LLM agent with RAG (Retrieval-Augmented Generation)** capabilities, able to query both its internal model knowledge and a connected **MySQL database**. It allows users to ask natural-language questions that the agent translates into SQL queries and executes automatically.
+SQLAgent is a lightweight learning project that answers natural-language questions about a MySQL database by using an LLM to inspect schema, generate SQL, execute the query, and summarize the result.
 
-## ⚠️ Disclaimer
+The project now supports two deployment modes:
 
-This project is intended **for learning purposes only**.
-It is **not designed or guaranteed for production use**. Any deployment or usage is done **at your own risk**.
-The author assumes **no responsibility** for data loss, security issues, or system failures resulting from the use of this project.
+- Local Docker deployment with a locally hosted Ollama model.
+- Optional AWS deployment with Terraform, where Ollama runs on an EC2 instance.
 
-## 🚀 Features
-- 💡 **RAG-powered reasoning** — Combines generative LLM reasoning with real database retrieval.
-- 🗄️ **MySQL integration** — Directly connects to your MySQL data.
-- 🐳 **Dockerized setup** — One-command deployment with Docker Compose.
-- 🌐 **HTTP API** — Simple API endpoint for natural-language queries.
+## Disclaimer
 
-## 🧱 Requirements
+This project is intended for learning purposes only.
+It is not designed or guaranteed for production use.
+Any deployment or usage is done at your own risk.
 
-- 🐳 Docker
-- 💻 Basic terminal usage
+## Features
 
-## 🛠️ Setup Instructions
+- Natural-language to SQL querying against a MySQL database.
+- Docker-based local development workflow.
+- Configurable Ollama endpoint, so the app can target either local or cloud-hosted Ollama.
+- Optional AWS infrastructure managed with Terraform.
+- Health endpoint at `GET /health` for deployment checks.
+
+## Requirements
+
+### Local mode
+
+- Docker
+- Docker Compose
+
+### AWS mode
+
+- Terraform 1.6+
+- An AWS account
+- AWS CLI credentials configured locally
+- A Git-accessible copy of this repository
+
+## Local Deployment
 
 ### 1. Add your database dump
-Place your SQL dump file in `./db/db.sql`.
 
-This file will be imported into the MySQL container during startup.
+For a quick test, copy the included example dump:
+
+```bash
+cp db/db.sql.example db/db.sql
+```
+
+If you want to use your own data instead, place your SQL dump file at `./db/db.sql`.
 
 ### 2. Set the MySQL password
 
-Store your MySQL root password in `./db/passwd.txt`. This value will be read by the container during startup.
+Store the MySQL root password in `./db/passwd.txt`.
 
-Make sure that `./db/passwd.txt` contains *only* the password and **no trailing newline**. Many editors automatically append a newline at the end of the file, which will cause MySQL authentication to fail.
-
-To safely create the file without adding a newline, run:
+Make sure the file contains only the password and no trailing newline:
 
 ```bash
 echo -n "your_password_here" > db/passwd.txt
 ```
 
+### 3. Optionally choose a local model
 
-### 3. (Optional) Choose the model
-
-If you wish to change the default Ollama model (`gpt-oss:20b`), set the `OLLAMA_MODEL` environment variable:
+The default local model is `gpt-oss:20b`.
 
 ```bash
 export OLLAMA_MODEL=model_identifier
 ```
 
-### 4. Start the agent
-
-Run the following command from the project root:
+### 4. Start the local stack
 
 ```bash
 docker compose up
 ```
 
-This will start both the LLM agent and the MySQL database, automatically initializing the schema and data from `./db/db.sql`, and reading the MySQL password from `./db/passwd.txt`.
+This starts:
 
-> ⚠️ **Note:** If this is your first run or the required Ollama models are not yet downloaded, please wait until the model download completes before sending any queries to the agent.
+- `ollama` for local model hosting
+- `db` for MySQL
+- `agent` for the FastAPI application
 
-## 💬 Example Usage
+If the model is not downloaded yet, wait for the Ollama container to finish pulling it before sending queries.
 
-After startup, query the agent via HTTP:
+### 5. Query the agent
 
 ```bash
 curl -G --data-urlencode "q=Your query" http://localhost:8000
 ```
 
-The agent will process your question, generate SQL queries, run it on the MySQL database, and return the result in natural language.
+### 6. Check service health
 
-## 🧩 Project Structure
-
+```bash
+curl http://localhost:8000/health
 ```
+
+## AWS Deployment
+
+The AWS path is intentionally simple and cost-focused:
+
+- one EC2 instance
+- Docker Compose running `ollama`, `db`, and `agent`
+- Terraform-managed VPC, subnet, security group, IAM role, S3 bootstrap bucket, and SSM parameter
+
+This keeps the app easy to understand, but it is still not a production-grade architecture.
+
+### Important cost note
+
+Running Ollama in AWS is much heavier than calling a managed API. The default cloud deployment therefore uses a much smaller model than local mode:
+
+- Local default: `gpt-oss:20b`
+- AWS default: `qwen2.5:0.5b-instruct-q5_0`
+
+Even with that change, AWS free-tier compatibility depends on your AWS account type, your region, your storage usage, and how long the instance runs. Treat the provided Terraform defaults as "lowest practical cost", not "guaranteed free".
+
+### 1. Prepare Terraform variables
+
+Move into the Terraform directory:
+
+```bash
+cd terraform/aws
+```
+
+Create a local variables file from the example:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Update at least these values:
+
+- `project_ref`
+- `db_dump_path`
+- `db_root_password`
+- `app_ingress_cidr_blocks`
+
+For a quick infrastructure smoke test, you can point `db_dump_path` at `../../db/db.sql.example`.
+
+### 2. Review the defaults
+
+The Terraform stack will:
+
+- upload your local SQL dump to a private S3 bucket
+- store the MySQL password in SSM Parameter Store
+- provision an EC2 instance
+- install Docker and Docker Compose on the instance
+- clone this repository on the instance
+- start the AWS-specific Compose stack from `compose.aws.yaml`
+
+### 3. Deploy
+
+```bash
+terraform init
+terraform plan
+terraform apply
+```
+
+After `apply`, Terraform outputs the public API URL and an AWS Systems Manager command you can use to open a shell on the instance.
+
+### 4. Destroy when you are done
+
+```bash
+terraform destroy
+```
+
+## Configuration
+
+### LLM configuration
+
+- `OLLAMA_MODEL`: model name to use
+- `OLLAMA_BASE_URL`: full Ollama base URL such as `http://ollama:11434`
+
+### Database configuration
+
+- `MYSQL_HOST`
+- `MYSQL_PORT`
+- `MYSQL_DATABASE`
+- `MYSQL_USER`
+- `MYSQL_ROOT_PASSWORD`
+- `MYSQL_ROOT_PASSWORD_FILE`
+
+The application prefers `MYSQL_ROOT_PASSWORD` if it is set, and otherwise reads from `MYSQL_ROOT_PASSWORD_FILE`.
+
+## Project Structure
+
+```text
 .
+├── compose.yaml
+├── compose.aws.yaml
 ├── db/
-│   ├── db.sql           # Your MySQL dump file
-│   └── passwd.txt       # Your MySQL password
 ├── ollama/
-│   ├── entrypoint.sh    # Pulls the Ollama model before launching the agent
-│   └── ollama/          # Ollama models assets
-│       └── ...
-├── src/
-│   └── sqlagent/        # Source code of the agent
-│       └── ...
-├── tests/               # Unit tests
-│   └── ...
-├── compose.yaml         # Docker configuration
-├── Dockerfile           # Docker build instructions for the LLM agent
-├── LICENSE              # License file
+├── src/sqlagent/
+├── terraform/aws/
+├── tests/
+├── Dockerfile
 ├── README.md
 ├── pyproject.toml
-└── uv.lock              # Lockfile generated by uv to ensure deterministic dependency versions
+└── uv.lock
 ```
 
-## 📄 License
+## License
 
 This project is distributed under the [MIT License](./LICENSE).
